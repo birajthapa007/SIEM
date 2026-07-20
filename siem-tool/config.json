@@ -1,0 +1,34 @@
+{
+  "database": "siem.db",
+  "retention_days": 7,
+  "geoip": true,
+  "dashboard": { "host": "127.0.0.1", "port": 8787 },
+  "sources": {
+    "files": [],
+    "syslog": { "enabled": true, "host": "0.0.0.0", "port": 5514 }
+  },
+  "detection": {
+    "bruteforce_attempts": 5,
+    "bruteforce_window": 60,
+    "spray_users": 6,
+    "spray_window": 120,
+    "dist_ips": 5,
+    "dist_window": 120,
+    "portscan_ports": 10,
+    "portscan_window": 30,
+    "sudo_failures": 3,
+    "http_error_burst": 20,
+    "alert_cooldown": 120,
+    "anomaly_zscore": 3.5,
+    "anomaly_min_events": 15,
+    "work_hours": null,
+    "admin_users": ["root", "admin", "administrator"]
+  },
+  "alerting": {
+    "min_notify_severity": "high",
+    "webhook_url": "",
+    "email": {},
+    "auto_block": true,
+    "block_command": ""
+  }
+}

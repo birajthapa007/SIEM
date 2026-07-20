@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SIEM — Security Operations Center</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#080c13;--surface:#0d1420;--surface2:#0a0f19;--inset:#070b12;
+  --border:#182338;--border2:#223050;--text:#e2e8f2;--text2:#aab6c8;--muted:#5d6b82;
+  --accent:#4f8ef7;--crit:#f43f5e;--high:#fb923c;--med:#fbbf24;--low:#38bdf8;
+  --info:#475569;--ok:#34d399;
+  --r:10px;--mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);
+  font:400 1rem/1.4 -apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* ─── header ─── */
+header{display:flex;align-items:center;gap:14px;height:52px;padding:0 20px;
+  background:#0a101adf;backdrop-filter:blur(14px);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:60}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#2563eb,#4f8ef7);font-size:13px;flex:none}
+.brand h1{font-size:.95rem;font-weight:600;letter-spacing:.2px;white-space:nowrap}
+.brand .tag{font-size:.62rem;color:var(--muted);letter-spacing:1.6px;text-transform:uppercase;margin-top:1px}
+.hspace{flex:1}
+.hstat{display:flex;align-items:baseline;gap:5px;font-size:.75rem;color:var(--text2);white-space:nowrap}
+.hstat b{font-family:var(--mono);font-size:.85rem;color:var(--text)}
+.hsep{width:1px;height:18px;background:var(--border2)}
+#clock{font-family:var(--mono);font-size:.8rem;color:var(--text2)}
+.pill{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;
+  padding:3px 10px;border-radius:99px;border:1px solid var(--border2);color:var(--muted)}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--crit)}
+.pill.live{color:var(--ok);border-color:#34d39940}
+.pill.live .dot{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 1.8s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ─── layout ─── */
+main{max-width:1720px;margin:0 auto;padding:16px 20px 28px;display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+.panel-h{display:flex;align-items:center;gap:8px;padding:11px 14px 9px;
+  font-size:.68rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.1px}
+.panel-h .n{margin-left:auto;font-family:var(--mono);color:var(--text2);letter-spacing:0}
+.panel-b{padding:0 14px 12px}
+
+/* ─── KPIs ─── */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px 10px}
+.kpi .l{font-size:.62rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.kpi .v{font-family:var(--mono);font-size:1.45rem;font-weight:700;margin-top:3px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.kpi .v.warn{color:var(--high)}.kpi .v.bad{color:var(--crit)}.kpi .v.ok{color:var(--ok)}
+
+/* ─── charts ─── */
+.charts{display:grid;grid-template-columns:1.9fr 1fr 1.1fr;gap:14px}
+.charts .panel-b{height:168px;position:relative}
+
+/* ─── workspace ─── */
+.work{display:grid;grid-template-columns:1.55fr .95fr;gap:14px;align-items:start}
+.rail{display:flex;flex-direction:column;gap:14px}
+
+/* ─── filters ─── */
+.filters{display:flex;gap:7px;flex-wrap:wrap;padding:0 14px 10px}
+input,select{background:var(--inset);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:6px 10px;font-size:.8rem;outline:none;height:30px}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #4f8ef722}
+input[type=text]{flex:1;min-width:150px}
+input::placeholder{color:var(--muted)}
+button{background:var(--inset);border:1px solid var(--border);color:var(--text2);border-radius:8px;
+  height:30px;padding:0 12px;font-size:.72rem;font-weight:600;cursor:pointer;transition:.15s}
+button:hover{border-color:var(--border2);color:var(--text)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.on{background:#1b2b4a;border-color:var(--accent);color:#9cc0ff}
+button.ghost{height:22px;padding:0 9px;font-size:.66rem;border-radius:6px}
+
+/* ─── event table ─── */
+#evwrap{height:472px;overflow-y:auto;border-top:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{position:sticky;top:0;z-index:5;background:var(--surface);text-align:left;
+  font-size:.62rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;
+  padding:8px 10px;border-bottom:1px solid var(--border)}
+td{padding:0 10px;height:34px;border-bottom:1px solid #131d3040;font-size:.78rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+col.c-time{width:78px}col.c-sev{width:70px}col.c-type{width:118px}col.c-src{width:150px}
+tr.ev{cursor:pointer}
+tr.ev:hover td{background:#131d3066}
+tr.ev.info td{opacity:.62}
+tr.ev.low td{opacity:.82}
+tr.ev.high td{background:#fb923c0a}
+tr.ev.critical td{background:#f43f5e0e}
+tr.ev:hover td{opacity:1}
+tr.raw td{background:var(--inset);color:#7e93b4;font-family:var(--mono);font-size:.72rem;
+  white-space:normal;word-break:break-all;height:auto;padding:9px 12px;line-height:1.5}
+.t-time{font-family:var(--mono);font-size:.74rem;color:var(--text2)}
+.t-type{font-family:var(--mono);font-size:.72rem;color:var(--text2)}
+.t-src{font-family:var(--mono);font-size:.74rem}
+.sev{display:inline-flex;align-items:center;gap:6px;font-size:.66rem;font-weight:600;
+  text-transform:uppercase;letter-spacing:.4px}
+.sev::before{content:'';width:7px;height:7px;border-radius:2px;background:var(--info);flex:none}
+.sev.critical{color:#fda4af}.sev.critical::before{background:var(--crit);box-shadow:0 0 6px var(--crit)}
+.sev.high{color:#fdba74}.sev.high::before{background:var(--high)}
+.sev.medium{color:#fde68a}.sev.medium::before{background:var(--med)}
+.sev.low{color:#7dd3fc}.sev.low::before{background:var(--low)}
+.sev.info{color:var(--muted)}
+.cc{display:inline-block;font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:4px;
+  background:#123c38;color:#5eead4;vertical-align:1px;margin-left:5px;letter-spacing:.5px}
+.cc.doc{background:#31303c;color:#c4b5fd}
+
+/* ─── alert feed ─── */
+.tabs{display:flex;gap:5px;padding:0 14px 10px;flex-wrap:wrap}
+.tabs button{height:24px;padding:0 11px;font-size:.66rem;border-radius:99px}
+#alerts{height:308px;overflow-y:auto;padding:0 10px 10px;display:flex;flex-direction:column;gap:7px}
+.alert{position:relative;background:var(--surface2);border:1px solid var(--border);
+  border-radius:9px;padding:9px 11px 8px 14px;animation:in .25s ease}
+.alert::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;
+  background:var(--info)}
+.alert.critical::before{background:var(--crit)}.alert.high::before{background:var(--high)}
+.alert.medium::before{background:var(--med)}.alert.low::before{background:var(--low)}
+@keyframes in{from{opacity:0;transform:translateY(-5px)}}
+.alert .r1{display:flex;align-items:center;gap:8px}
+.alert .t{font-size:.8rem;font-weight:600;flex:1;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.alert .when{font-family:var(--mono);font-size:.66rem;color:var(--muted);flex:none}
+.alert .d{font-size:.72rem;color:var(--text2);margin-top:3px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.alert .r2{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;font-size:.6rem;font-weight:700;padding:2px 7px;
+  border-radius:5px;letter-spacing:.5px;text-transform:uppercase}
+.chip.critical{background:#3f0d1b;color:#fda4af}.chip.high{background:#3b1a07;color:#fdba74}
+.chip.medium{background:#3a2b06;color:#fde68a}.chip.low{background:#082f49;color:#7dd3fc}
+.chip.info{background:#1a2334;color:#94a3b8}
+.chip.mitre{background:#221e44;color:#b4b1fb;text-decoration:none;font-family:var(--mono)}
+.chip.mitre:hover{background:#2c2758}
+.chip.rule{background:#101a2c;color:var(--muted);font-family:var(--mono);text-transform:none}
+.alert .ackbtn{margin-left:auto}
+.acked-mark{margin-left:auto;font-size:.64rem;color:var(--ok)}
+
+/* ─── risk ─── */
+#risk{padding:2px 14px 12px;display:flex;flex-direction:column;gap:9px}
+.risk-item .r1{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.76rem}
+.risk-item .score{margin-left:auto;font-weight:700;font-size:.82rem}
+.risk-item .bar{height:5px;background:var(--inset);border-radius:3px;margin-top:5px;overflow:hidden}
+.risk-item .fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#fbbf24,#f43f5e)}
+.risk-item .rules{font-size:.62rem;color:var(--muted);margin-top:4px;font-family:var(--mono);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ─── blocklist ─── */
+#blocklist{padding:2px 14px 12px;display:flex;flex-direction:column;gap:6px}
+.blk{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:6px 8px 6px 11px;font-family:var(--mono);font-size:.76rem}
+.blk .why{color:var(--muted);font-size:.66rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.blk button{margin-left:auto}
+
+.empty{color:var(--muted);font-size:.74rem;padding:14px;text-align:center}
+#toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.toast{background:#160a10;border:1px solid #f43f5e66;border-left:3px solid var(--crit);
+  color:#fecdd3;border-radius:10px;padding:10px 14px;max-width:340px;font-size:.76rem;
+  box-shadow:0 12px 40px #000c;animation:in .3s ease}
+.toast b{display:block;color:#fff;margin-bottom:2px;font-size:.8rem}
+
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#1c2942;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#26375a}
+@media(max-width:1280px){.kpis{grid-template-columns:repeat(3,1fr)}
+  .charts{grid-template-columns:1fr 1fr}.work{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">🛡</div>
+    <div><h1>SIEM · Security Operations Center</h1>
+    <div class="tag">real-time · correlation · anomaly · threat intel · mitre att&amp;ck</div></div>
+  </div>
+  <div class="hspace"></div>
+  <div class="hstat"><b id="h-eps">0</b>ev/s</div>
+  <div class="hsep"></div>
+  <span id="clock">--:--:--</span>
+  <div class="pill" id="conn"><span class="dot"></span><span id="conn-t">connecting</span></div>
+</header>
+
+<main>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Total events</div><div class="v" id="c-total">–</div></div>
+    <div class="kpi"><div class="l">Events · 1h</div><div class="v" id="c-hour">–</div></div>
+    <div class="kpi"><div class="l">Events · sec</div><div class="v ok" id="c-eps">0</div></div>
+    <div class="kpi"><div class="l">Open alerts</div><div class="v warn" id="c-alerts">–</div></div>
+    <div class="kpi"><div class="l">Critical · 1h</div><div class="v bad" id="c-crit">–</div></div>
+    <div class="kpi"><div class="l">Blocked IPs</div><div class="v bad" id="c-blocked">–</div></div>
+  </div>
+
+  <div class="charts">
+    <div class="panel"><div class="panel-h">Event volume · 30 min</div>
+      <div class="panel-b"><canvas id="ch-vol"></canvas></div></div>
+    <div class="panel"><div class="panel-h">Alert severity · 1h</div>
+      <div class="panel-b"><canvas id="ch-sev"></canvas></div></div>
+    <div class="panel"><div class="panel-h">Event types · 1h</div>
+      <div class="panel-b"><canvas id="ch-types"></canvas></div></div>
+  </div>
+
+  <div class="work">
+    <div class="panel">
+      <div class="panel-h">Live event explorer
+        <span class="n" style="text-transform:none;letter-spacing:0">click row → raw log</span></div>
+      <div class="filters">
+        <input type="text" id="f-q" placeholder="Search message, user, raw…">
+        <select id="f-sev"><option value="">Severity</option>
+          <option>critical</option><option>high</option><option>medium</option>
+          <option>low</option><option>info</option></select>
+        <select id="f-type"><option value="">Type</option>
+          <option>auth_failure</option><option>auth_success</option><option>web_attack</option>
+          <option>web_scanner</option><option>http_request</option><option>http_error</option>
+          <option>firewall_block</option><option>priv_command</option><option>priv_failure</option>
+          <option>malware_indicator</option><option>system_error</option><option>generic</option></select>
+        <input type="text" id="f-ip" placeholder="IP" style="width:110px;flex:none">
+        <button class="primary" id="f-go">Search</button>
+        <button class="on" id="f-live">❚❚ Live</button>
+      </div>
+      <div id="evwrap"><table>
+        <colgroup><col class="c-time"><col class="c-sev"><col class="c-type"><col class="c-src"><col></colgroup>
+        <thead><tr><th>Time</th><th>Sev</th><th>Type</th><th>Source</th><th>Message</th></tr></thead>
+        <tbody id="events"></tbody>
+      </table></div>
+    </div>
+
+    <div class="rail">
+      <div class="panel">
+        <div class="panel-h">Alert feed<span class="n" id="al-count"></span></div>
+        <div class="tabs" id="sev-tabs">
+          <button class="on" data-s="">All</button><button data-s="critical">Critical</button>
+          <button data-s="high">High</button><button data-s="medium">Medium</button>
+          <button data-s="open">Open</button>
+        </div>
+        <div id="alerts"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Top risky IPs · 24h</div>
+        <div id="risk"><div class="empty">no data yet</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Blocked IPs · active response</div>
+        <div id="blocklist"><div class="empty">none</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+<div id="toasts"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=ts=>new Date(ts*1000).toLocaleTimeString('en-GB',{hour12:false});
+const rel=ts=>{const s=(Date.now()/1000-ts)|0;
+  return s<5?'now':s<60?s+'s':s<3600?((s/60)|0)+'m':((s/3600)|0)+'h';};
+let live=true,epsCounter=0,alertFilter='',geoCache={},alertCache=[];
+const sevColors={critical:'#f43f5e',high:'#fb923c',medium:'#fbbf24',low:'#38bdf8',info:'#475569'};
+
+/* ── charts ── */
+Chart.defaults.color='#5d6b82';Chart.defaults.borderColor='#182338';
+Chart.defaults.font.family="-apple-system,'SF Pro Text','Segoe UI',sans-serif";
+Chart.defaults.font.size=10;
+const chVol=new Chart($('ch-vol'),{type:'line',
+  data:{labels:[...Array(30).keys()].map(i=>(i-29)+'m'),
+    datasets:[{data:Array(30).fill(0),borderColor:'#4f8ef7',borderWidth:1.8,
+    backgroundColor:c=>{const g=c.chart.ctx.createLinearGradient(0,0,0,160);
+      g.addColorStop(0,'#4f8ef73a');g.addColorStop(1,'#4f8ef700');return g},
+    fill:true,tension:.4,pointRadius:0}]},
+  options:{maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:8}},
+      y:{beginAtZero:true,grid:{color:'#131d30'},ticks:{maxTicksLimit:5}}}}});
+const chSev=new Chart($('ch-sev'),{type:'doughnut',
+  data:{labels:[],datasets:[{data:[],backgroundColor:[],borderWidth:0,borderRadius:3,spacing:2}]},
+  options:{maintainAspectRatio:false,animation:false,cutout:'72%',
+    plugins:{legend:{position:'right',labels:{boxWidth:8,boxHeight:8,padding:8,usePointStyle:true}}}}});
+const chTypes=new Chart($('ch-types'),{type:'bar',
+  data:{labels:[],datasets:[{data:[],backgroundColor:'#4f8ef7b0',borderRadius:3,barThickness:9}]},
+  options:{maintainAspectRatio:false,animation:false,indexAxis:'y',
+    plugins:{legend:{display:false}},
+    scales:{x:{beginAtZero:true,grid:{color:'#131d30'},ticks:{maxTicksLimit:5}},
+      y:{grid:{display:false},ticks:{font:{family:"ui-monospace,Menlo,monospace",size:9.5}}}}}});
+
+/* ── geo ── */
+async function geo(ips){
+  const need=[...new Set(ips.filter(ip=>ip&&!(ip in geoCache)))];
+  if(!need.length)return;
+  try{Object.assign(geoCache,await (await fetch('/api/geo?ips='+need.join(','))).json());}catch(e){}
+}
+const ccTag=ip=>{const g=geoCache[ip];if(!g)return'';
+  const doc=g.cc==='DOC'||g.cc==='LAN';
+  return `<span class="cc${g.cc==='DOC'?' doc':''}" title="${esc(g.country)}">${esc(g.cc)}</span>`};
+
+/* ── stats ── */
+async function refreshStats(){
+  try{
+    const s=await (await fetch('/api/stats')).json();
+    $('c-total').textContent=s.total_events.toLocaleString();
+    $('c-hour').textContent=s.events_last_hour.toLocaleString();
+    $('c-alerts').textContent=s.open_alerts;
+    $('c-blocked').textContent=s.blocked_ips;
+    $('c-crit').textContent=(s.alerts_by_severity||{}).critical||0;
+    chVol.data.datasets[0].data=s.events_per_min;chVol.update();
+    const sev=s.alerts_by_severity||{};
+    chSev.data.labels=Object.keys(sev);
+    chSev.data.datasets[0].data=Object.values(sev);
+    chSev.data.datasets[0].backgroundColor=Object.keys(sev).map(k=>sevColors[k]||'#475569');
+    chSev.update();
+    const t=s.events_by_type||{};
+    chTypes.data.labels=Object.keys(t);chTypes.data.datasets[0].data=Object.values(t);chTypes.update();
+    renderRisk(s.risk_ips||[]);
+  }catch(e){}
+}
+async function renderRisk(rows){
+  await geo(rows.map(r=>r.ip));
+  const max=Math.max(...rows.map(r=>r.score),1);
+  $('risk').innerHTML=rows.length?rows.slice(0,6).map(r=>`
+    <div class="risk-item">
+      <div class="r1"><span>${esc(r.ip)}</span>${ccTag(r.ip)}
+        <span class="score">${r.score}</span></div>
+      <div class="bar"><div class="fill" style="width:${Math.max(6,100*r.score/max)}%"></div></div>
+      <div class="rules">${esc((r.rules||'').split(',').slice(0,3).join(' · '))}</div>
+    </div>`).join(''):'<div class="empty">no data yet</div>';
+}
+
+/* ── events ── */
+const sevLabel={critical:'CRIT',high:'HIGH',medium:'MED',low:'LOW',info:'INFO'};
+function evRow(e){
+  return `<tr class="ev ${e.severity}" data-raw="${esc(e.raw)}">
+    <td class="t-time">${fmt(e.ts)}</td>
+    <td><span class="sev ${e.severity}">${sevLabel[e.severity]||e.severity}</span></td>
+    <td class="t-type">${esc(e.event_type)}</td>
+    <td class="t-src">${esc(e.ip||e.user||'—')}${ccTag(e.ip)}</td>
+    <td title="${esc(e.message)}">${esc(e.message)}</td></tr>`;
+}
+$('events').addEventListener('click',ev=>{
+  const tr=ev.target.closest('tr.ev');if(!tr)return;
+  const nxt=tr.nextElementSibling;
+  if(nxt&&nxt.classList.contains('raw')){nxt.remove();return}
+  tr.insertAdjacentHTML('afterend',
+    `<tr class="raw"><td colspan="5">${tr.dataset.raw||'(no raw log)'}</td></tr>`);
+});
+async function searchEvents(){
+  const p=new URLSearchParams();
+  if($('f-q').value)p.set('q',$('f-q').value);
+  if($('f-sev').value)p.set('severity',$('f-sev').value);
+  if($('f-type').value)p.set('type',$('f-type').value);
+  if($('f-ip').value)p.set('ip',$('f-ip').value);
+  p.set('limit',200);
+  const rows=await (await fetch('/api/events?'+p)).json();
+  await geo(rows.map(r=>r.ip));
+  $('events').innerHTML=rows.map(evRow).join('')||
+    '<tr><td colspan="5"><div class="empty">no matching events</div></td></tr>';
+}
+$('f-go').onclick=()=>{setLive(false);searchEvents()};
+$('f-q').addEventListener('keydown',e=>{if(e.key==='Enter')$('f-go').click()});
+function setLive(v){live=v;$('f-live').textContent=v?'❚❚ Live':'▶ Resume';
+  $('f-live').classList.toggle('on',v)}
+$('f-live').onclick=()=>setLive(!live);
+
+/* ── alerts ── */
+function alertHtml(a){
+  return `<div class="alert ${a.severity}">
+    <div class="r1"><span class="t" title="${esc(a.title)}">${esc(a.title)}</span>
+      <span class="when" data-ts="${a.ts}">${rel(a.ts)}</span></div>
+    <div class="d">${esc(a.detail)}</div>
+    <div class="r2">
+      <span class="chip ${a.severity}">${a.severity}</span>
+      ${a.mitre?`<a class="chip mitre" target="_blank"
+        href="https://attack.mitre.org/techniques/${a.mitre.replace('.','/')}/">${esc(a.mitre)}</a>`:''}
+      <span class="chip rule">${esc(a.rule)}</span>
+      ${a.geo?`<span class="cc${a.geo.includes('demo')?' doc':''}">${esc(a.geo.split(' ')[0])}</span>`:''}
+      ${a.acked?'<span class="acked-mark">✓ acked</span>'
+        :`<button class="ghost ackbtn" onclick="ack(${a.id})">Ack</button>`}
+    </div></div>`;
+}
+async function loadAlerts(){
+  const open=alertFilter==='open';
+  const rows=await (await fetch(`/api/alerts?limit=80${open?'&open=1':''}`)).json();
+  alertCache=rows;
+  const f=open?rows:(alertFilter?rows.filter(a=>a.severity===alertFilter):rows);
+  $('alerts').innerHTML=f.map(alertHtml).join('')||'<div class="empty">no alerts</div>';
+  $('al-count').textContent=`${rows.filter(a=>!a.acked).length} open`;
+}
+$('sev-tabs').addEventListener('click',e=>{
+  if(e.target.tagName!=='BUTTON')return;
+  [...$('sev-tabs').children].forEach(b=>b.classList.remove('on'));
+  e.target.classList.add('on');
+  alertFilter=e.target.dataset.s;loadAlerts();
+});
+async function ack(id){
+  await fetch('/api/alerts/ack',{method:'POST',body:JSON.stringify({id})});
+  loadAlerts();refreshStats();
+}
+async function loadBlocklist(){
+  const rows=await (await fetch('/api/blocklist')).json();
+  await geo(rows.map(r=>r.ip));
+  $('blocklist').innerHTML=rows.length?rows.map(b=>`
+    <div class="blk"><span>${esc(b.ip)}</span>${ccTag(b.ip)}
+      <span class="why">· ${esc(b.reason)}</span>
+      <button class="ghost" onclick="unblock('${esc(b.ip)}')">Unblock</button></div>`).join('')
+    :'<div class="empty">none</div>';
+}
+async function unblock(ip){
+  await fetch('/api/blocklist/remove',{method:'POST',body:JSON.stringify({ip})});
+  loadBlocklist();refreshStats();
+}
+
+/* ── toasts ── */
+function toast(a){
+  const el=document.createElement('div');el.className='toast';
+  el.innerHTML=`<b>⚠ ${esc(a.severity.toUpperCase())} — ${esc(a.title)}</b>${esc(a.detail).slice(0,130)}`;
+  $('toasts').appendChild(el);setTimeout(()=>el.remove(),8000);
+}
+
+/* ── SSE ── */
+function connect(){
+  const es=new EventSource('/stream');
+  es.onopen=()=>{$('conn').classList.add('live');$('conn-t').textContent='live'};
+  es.onerror=()=>{$('conn').classList.remove('live');$('conn-t').textContent='reconnecting'};
+  es.onmessage=m=>{
+    const d=JSON.parse(m.data);
+    if(d.kind==='event'){
+      epsCounter++;
+      if(live){
+        const tb=$('events');
+        tb.insertAdjacentHTML('afterbegin',evRow(d));
+        while(tb.rows.length>200)tb.deleteRow(-1);
+      }
+    }else if(d.kind==='alert'){
+      if(d.severity==='critical')toast(d);
+      loadAlerts();refreshStats();
+    }else if(d.kind==='block'){loadBlocklist();refreshStats()}
+  };
+}
+
+/* ── timers ── */
+setInterval(()=>{$('c-eps').textContent=epsCounter;$('h-eps').textContent=epsCounter;epsCounter=0},1000);
+setInterval(refreshStats,10000);
+setInterval(()=>{document.querySelectorAll('.when').forEach(el=>
+  el.textContent=rel(+el.dataset.ts))},15000);
+setInterval(()=>{$('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false})},1000);
+refreshStats();loadAlerts();loadBlocklist();searchEvents().then(()=>setLive(true));connect();
+</script>
+</body>
+</html>

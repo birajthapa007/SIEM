@@ -1,0 +1,32 @@
+[
+  {
+    "name": "reverse_shell",
+    "regex": "(?i)(nc -e /bin/|bash -i >& /dev/tcp/|python -c ['\"]import socket)",
+    "event_type": "malware_indicator",
+    "severity": "critical"
+  },
+  {
+    "name": "crypto_miner",
+    "regex": "(?i)(xmrig|minerd|stratum\\+tcp)",
+    "event_type": "malware_indicator",
+    "severity": "critical"
+  },
+  {
+    "name": "suspicious_download",
+    "regex": "(?i)(wget|curl).{0,40}\\.(sh|py|elf|exe)\\b.{0,40}(\\||;|&&).{0,20}(sh|bash|python)",
+    "event_type": "malware_indicator",
+    "severity": "high"
+  },
+  {
+    "name": "user_added_to_sudoers",
+    "regex": "(usermod.*-aG.*sudo|echo.*>>.*/etc/sudoers)",
+    "event_type": "priv_escalation",
+    "severity": "high"
+  },
+  {
+    "name": "ssh_key_injected",
+    "regex": "(?i)echo.{0,100}>>.{0,40}authorized_keys",
+    "event_type": "persistence",
+    "severity": "critical"
+  }
+]
